@@ -5,14 +5,10 @@
 #include <stdlib.h>
 #include <share.h>
 
-#include <opencv2\opencv.hpp>
-#include <opencv2\highgui.hpp>
-#include <opencv2\features2d.hpp>
-
+#include <string>
 #include "vam.h"
 
 using namespace std;
-using namespace cv;
 
 void
 die(char *err_msg)
@@ -24,11 +20,12 @@ die(char *err_msg)
 bool
 raw_fname(int i, string &fname)
 {
-    fname = "E:\\RectifiedImgs\\img" + to_string(i) + ".raw";
+    fname = "E:\\RectifiedImgs\\s3\\img" + to_string(i) + ".raw";
     return _access(fname.c_str(), 0) != -1;
 }
 
-void read_file(FILE *stream, void *buffer, size_t num_bytes)
+void
+read_file(FILE *stream, void *buffer, size_t num_bytes)
 {
     if (fread(buffer, num_bytes, 1, stream) != 1)
     {
@@ -65,9 +62,9 @@ read_raw_files(vam_handle *vah)
     }
 }
 
-//void
-//main()
-//{
-//    auto vah = vam_init(1200, 1200);
-//    read_raw_files(vah);
-//}
+void
+main()
+{
+    auto vah = vam_init(1200, 1200);
+    read_raw_files(vah);
+}

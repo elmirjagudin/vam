@@ -1,4 +1,8 @@
+// vam.cpp : Defines the exported functions for the DLL application.
+//
+
 #include "stdafx.h"
+#include "vam.h"
 
 #include <stdio.h>
 #include <algorithm>
@@ -7,12 +11,10 @@
 #include <opencv2\highgui.hpp>
 #include <opencv2\features2d.hpp>
 
-#include "vam.h"
-
 #define FEATURES 32
 #define MIN_MATCH_DISTANCE 16
-#define NUM_TRACK_POINTS 4
-#define MAX_INIT_POINTS 128
+#define NUM_TRACK_POINTS 8
+#define MAX_INIT_POINTS 256
 
 using namespace std;
 using namespace cv;
@@ -58,9 +60,20 @@ show_keypoints(Mat img, vector<KeyPoint> & keypoints)
     waitKey(1);
 }
 
+static void open_debug_console()
+{
+    AllocConsole();
+    FILE* fp;
+
+    freopen_s(&fp, "CONOUT$", "w", stdout);
+    printf("Debugging Window:\n");
+}
+
 vam_handle *
 vam_init(int width, int height)
 {
+    open_debug_console();
+
     vam_handle *vah = new vam_handle_s();
     vah->mode = vam_aquire;
     vah->width = width;
@@ -73,13 +86,11 @@ vam_init(int width, int height)
 }
 
 static bool
-vam_add_new_keypoints(vam_handle *vah, 
+vam_add_new_keypoints(vam_handle *vah,
                       Mat & descriptors,
                       vector<bool> & matched_descriptors)
 {
-    for (int i = 0;
-         i < descriptors.rows;
-         i += 1)
+    for (int i = 0; i < descriptors.rows; i += 1)
     {
         if (vah->descriptors.rows >= MAX_INIT_POINTS)
         {
@@ -116,10 +127,10 @@ vam_tally_matches(vam_handle *vah, vector<DMatch> & matches, vector<bool> & matc
     }
 }
 
-bool 
+bool
 kp_matches(key_point l, key_point r)
 {
-    return l.matches > r.matches; 
+    return l.matches > r.matches;
 }
 
 static void
@@ -129,10 +140,9 @@ pick_top_points(vam_handle *vah)
          vah->key_points.end(),
          kp_matches);
 
-    vah->track_descriptors = 
+    vah->track_descriptors =
         Mat(0, vah->descriptors.cols, vah->descriptors.type());
 
-    //for (int i = 0; i < NUM_TRACK_POINTS; i += 1)
     for (auto i = vah->key_points.begin();
          i != vah->key_points.begin() + NUM_TRACK_POINTS;
          i++)
@@ -140,16 +150,15 @@ pick_top_points(vam_handle *vah)
         auto desc_row = (*i).descriptor_idx;
         vah->track_descriptors.push_back(vah->descriptors.row(desc_row));
     }
-    printf("let done top pick type %i\n", vah->descriptors.type());
 }
 
 static vam_mode
 vam_aquire_points(vam_handle *vah, Mat & descriptors)
 {
     vector<DMatch> matches = vector<DMatch>();
-    vector<bool> matched_descriptors = vector<bool>(FEATURES);
 
     vah->matcher.match(vah->descriptors, descriptors, matches);
+    vector<bool> matched_descriptors = vector<bool>(descriptors.rows);
 
     vam_tally_matches(vah, matches, matched_descriptors);
     if (!vam_add_new_keypoints(vah, descriptors, matched_descriptors))
@@ -167,7 +176,7 @@ vam_track_points(vam_handle *vah, Mat & descriptors)
     vector<DMatch> matches = vector<DMatch>();
     vah->matcher.match(vah->track_descriptors, descriptors, matches);
 
-    printf("track matches\n");
+    printf("tracking...\n");
 
     for (auto match = matches.begin(); match != matches.end(); ++match)
     {
@@ -177,10 +186,9 @@ vam_track_points(vam_handle *vah, Mat & descriptors)
             continue;
         }
 
-        printf("dist %f\n", match->distance);
+        printf("match %f %i -> %i\n", match->distance, match->queryIdx, match->trainIdx);
     }
 }
-
 
 void
 vam_process_frame(vam_handle *vah, void *pixels)
