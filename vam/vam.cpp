@@ -1,6 +1,3 @@
-// vam.cpp : Defines the exported functions for the DLL application.
-//
-
 #include "stdafx.h"
 #include "vam.h"
 
@@ -11,10 +8,12 @@
 #include <opencv2\highgui.hpp>
 #include <opencv2\features2d.hpp>
 
-#define FEATURES 32
+#include "angles.h"
+
+#define FEATURES 32*8
 #define MIN_MATCH_DISTANCE 16
-#define NUM_TRACK_POINTS 8
-#define MAX_INIT_POINTS 256
+#define NUM_TRACK_POINTS 1
+#define MAX_INIT_POINTS 256*4
 
 using namespace std;
 using namespace cv;
@@ -170,9 +169,12 @@ vam_aquire_points(vam_handle *vah, Mat & descriptors)
     return vam_aquire;
 }
 
+#define M_PI 3.14159265359
+
 static void
-vam_track_points(vam_handle *vah, Mat & descriptors)
+vam_track_points(vam_handle *vah, Mat & frame, vector<KeyPoint> & keypoints, Mat & descriptors)
 {
+    vector<KeyPoint> matched_keypoints;
     vector<DMatch> matches = vector<DMatch>();
     vah->matcher.match(vah->track_descriptors, descriptors, matches);
 
@@ -186,8 +188,23 @@ vam_track_points(vam_handle *vah, Mat & descriptors)
             continue;
         }
 
-        printf("match %f %i -> %i\n", match->distance, match->queryIdx, match->trainIdx);
+        auto kp = keypoints[match->trainIdx];
+        matched_keypoints.push_back(kp);
     }
+
+    for (auto i = matched_keypoints.begin(); i != matched_keypoints.end(); ++i)
+    {
+        auto kp = *i;
+
+        printf("x %f y %f\n", kp.pt.x, kp.pt.y);
+
+        auto vect = pixel_to_vect(kp.pt.x, kp.pt.y);
+        cout << vect << endl;
+//        cout << vect_angle(vect, X_AXIS) * (360 / (M_PI * 2)) << " " 
+//             << vect_angle(vect, Y_AXIS) * (360 / (M_PI * 2)) << endl;
+    }
+
+    show_keypoints(frame, matched_keypoints);
 }
 
 void
@@ -196,7 +213,9 @@ vam_process_frame(vam_handle *vah, void *pixels)
     vector<KeyPoint> keypoints;
     Mat descriptors;
 
-    Mat frame = Mat(vah->width, vah->height, CV_8UC4, pixels);
+    Mat tmp = Mat(vah->width, vah->height, CV_8UC4, pixels);
+    Mat frame;
+    cv::resize(tmp, frame, cv::Size(), 0.5, 0.5);
 
     vah->orb->detectAndCompute(_InputArray(frame), cv::noArray(), keypoints, descriptors);
 
@@ -206,11 +225,9 @@ vam_process_frame(vam_handle *vah, void *pixels)
         vah->mode = vam_aquire_points(vah, descriptors);
         break;
     case vam_tracking:
-        vam_track_points(vah, descriptors);
+        vam_track_points(vah, frame, keypoints, descriptors);
         break;
     default:
         assert(false);
     }
-
-    show_keypoints(frame, keypoints);
 }
